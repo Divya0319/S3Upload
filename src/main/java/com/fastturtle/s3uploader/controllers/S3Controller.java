@@ -8,6 +8,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.net.URL;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/s3")
@@ -20,15 +22,15 @@ public class S3Controller {
     }
 
     @PostMapping("/upload")
-    public String uploadFile(@RequestParam("file") MultipartFile file) {
+    public Map<String, String> uploadFile(@RequestParam("file") MultipartFile file) {
         try {
             String bucketName = "bucket-for-expenses-csv";
             String fileName = file.getOriginalFilename();
 
-            s3Service.uploadFile(bucketName, fileName, new String(file.getBytes()));
-            return "File uploaded successfully";
+            String fileUrl = s3Service.uploadFile(bucketName, fileName, new String(file.getBytes()));
+            return Map.of("fileUrl", fileUrl);
         } catch (IOException e) {
-            return "Error occurred: " + e.getMessage();
+            return Map.of("error", e.getMessage());
         }
     }
 }
