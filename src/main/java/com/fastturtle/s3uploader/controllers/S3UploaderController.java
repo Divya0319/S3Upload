@@ -26,21 +26,16 @@ public class S3UploaderController {
 
     @PostMapping("/upload")
     public String uploadFile(@RequestParam("file") MultipartFile file, Model model) {
-        try {
-            String bucketName = "bucket-for-expenses-csv";
-            String fileName = file.getOriginalFilename();
+        String bucketName = "bucket-for-expenses-csv";
+        String fileName = file.getOriginalFilename();
 
-            String uploadFileUrl = s3Service.uploadFile(bucketName, fileName, new String(file.getBytes()));
+        String uploadFileUrl = s3Service.uploadFile(bucketName, fileName, file);
 
-            String fileType = file.getContentType();
-            String fileCategory = fileType != null && fileType.startsWith("image") ? "image" : "other";
+        String fileType = file.getContentType();
+        String fileCategory = fileType != null && fileType.startsWith("image") ? "image" : "other";
 
-            model.addAttribute("uploadedFile", uploadFileUrl);
-            model.addAttribute("uploadedFileType", fileCategory);
-
-        } catch (IOException e) {
-            model.addAttribute("error", "Failed to upload file: " + e.getMessage());
-        }
+        model.addAttribute("uploadedFile", uploadFileUrl);
+        model.addAttribute("uploadedFileType", fileCategory);
 
         return "fileUploader";
     }

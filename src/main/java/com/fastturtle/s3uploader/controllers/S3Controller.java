@@ -23,14 +23,10 @@ public class S3Controller {
 
     @PostMapping("/upload")
     public Map<String, String> uploadFile(@RequestParam("file") MultipartFile file) {
-        try {
-            String bucketName = "bucket-for-expenses-csv";
-            String fileName = file.getOriginalFilename();
+        String bucketName = "bucket-for-expenses-csv";
+        String fileName = file.getOriginalFilename();
 
-            String fileUrl = s3Service.uploadFile(bucketName, fileName, new String(file.getBytes()));
-            return Map.of("fileUrl", fileUrl);
-        } catch (IOException e) {
-            return Map.of("error", e.getMessage());
-        }
+        String fileUrl = s3Service.uploadFile(bucketName, fileName, file);
+        return Map.of("fileUrl", fileUrl);
     }
 }

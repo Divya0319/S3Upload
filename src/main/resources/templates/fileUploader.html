@@ -32,7 +32,7 @@
         <h4>Uploaded File:</h4>
         <div th:if="${uploadedFileType == 'image'}">
             <!-- Show Image -->
-            <img th:src="@{${uploadedFile}}" alt="Uploaded Image" width="200" height="200">
+            <img th:src="@{${uploadedFile}}" alt="Uploaded Image">
         </div>
         <div th:if="${uploadedFileType != 'image'}">
             <!-- Show Link -->

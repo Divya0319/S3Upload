@@ -2,6 +2,7 @@ package com.fastturtle.s3uploader.services;
 
 import com.fastturtle.s3uploader.utils.S3UrlGenerator;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -21,7 +22,7 @@ public class S3Service {
         this.s3Client = s3Client;
     }
 
-    public String uploadFile(String bucketName, String fileName, String content) {
+    public String uploadFile(String bucketName, String fileName, MultipartFile file) {
         String mimeType;
         try {
             mimeType = Files.probeContentType(Paths.get(fileName));
@@ -38,7 +39,11 @@ public class S3Service {
                 .contentDisposition("inline") // Ensure the browser attempts to render
                 .build();
 
-        s3Client.putObject(putObjectRequest, RequestBody.fromString(content));
+        try {
+            s3Client.putObject(putObjectRequest, RequestBody.fromBytes(file.getBytes()));
+        } catch (IOException e) {
+            throw new RuntimeException("S3 file upload error :", e);
+        }
 
         S3UrlGenerator s3UrlGenerator = new S3UrlGenerator();
 
