@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
 
 @Controller
@@ -25,14 +26,21 @@ public class S3UploaderController {
     }
 
     @PostMapping("/upload")
-    public String uploadFile(@RequestParam("file") MultipartFile file, Model model) {
+    public String uploadFile(@RequestParam("file") File file, Model model) {
         String bucketName = "bucket-for-expenses-csv";
-        String fileName = file.getOriginalFilename();
+        String fileName = file.getName();
 
         String uploadFileUrl = s3Service.uploadFile(bucketName, fileName, file);
 
-        String fileType = file.getContentType();
-        String fileCategory = fileType != null && fileType.startsWith("image") ? "image" : "other";
+        String fileType = null;
+
+        if(fileName.endsWith(".jpg") || fileName.endsWith(".jpeg")) {
+            fileType = "image/jpeg";
+        } else if(fileName.endsWith(".png")) {
+            fileType = "image/png";
+        }
+
+        String fileCategory = fileType != null ? "image" : "other";
 
         model.addAttribute("uploadedFile", uploadFileUrl);
         model.addAttribute("uploadedFileType", fileCategory);

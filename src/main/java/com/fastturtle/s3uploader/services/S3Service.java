@@ -8,6 +8,7 @@ import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
+import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
@@ -22,7 +23,7 @@ public class S3Service {
         this.s3Client = s3Client;
     }
 
-    public String uploadFile(String bucketName, String fileName, MultipartFile file) {
+    public String uploadFile(String bucketName, String fileName, File file) {
         String mimeType;
         try {
             mimeType = Files.probeContentType(Paths.get(fileName));
@@ -52,11 +53,7 @@ public class S3Service {
                 .contentDisposition("inline") // Ensure the browser attempts to render
                 .build();
 
-        try {
-            s3Client.putObject(putObjectRequest, RequestBody.fromBytes(file.getBytes()));
-        } catch (IOException e) {
-            throw new RuntimeException("S3 file upload error :", e);
-        }
+        s3Client.putObject(putObjectRequest, RequestBody.fromFile(file));
 
         S3UrlGenerator s3UrlGenerator = new S3UrlGenerator();
 

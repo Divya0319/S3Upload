@@ -5,6 +5,7 @@ import com.fastturtle.s3uploader.services.S3Service;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.util.Map;
 
 @RestController
@@ -18,9 +19,9 @@ public class S3Controller {
     }
 
     @PostMapping("/upload")
-    public Map<String, String> uploadFile(@RequestParam("file") MultipartFile file) {
+    public Map<String, String> uploadFile(@RequestParam("file") File file) {
         String bucketName = "bucket-for-expenses-csv";
-        String fileName = file.getOriginalFilename();
+        String fileName = file.getName();
 
         String fileUrl = s3Service.uploadFile(bucketName, fileName, file);
         return Map.of("fileUrl", fileUrl);
