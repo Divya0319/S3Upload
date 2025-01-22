@@ -1,6 +1,7 @@
 package com.fastturtle.s3uploader.services;
 
 import com.fastturtle.s3uploader.utils.S3UrlGenerator;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -14,11 +15,9 @@ import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
+import java.util.concurrent.*;
 
 @Service
 public class S3MultipartUpload {
@@ -27,11 +26,27 @@ public class S3MultipartUpload {
 
     private final S3Client s3Client;
 
+    private final ConcurrentMap<Integer, CompletedPart> completedParts;
+
+    private ScheduledExecutorService scheduler;
+
+    // Utilising multithreading to upload multiple parts concurrently
+    private ExecutorService executor = new ThreadPoolExecutor(
+            4,
+            10,
+            60L,
+            TimeUnit.SECONDS,
+            new LinkedBlockingDeque<>());
+
     public S3MultipartUpload(S3Client s3Client) {
         this.s3Client = s3Client;
+        completedParts = new ConcurrentHashMap<>();
+        this.scheduler = Executors.newScheduledThreadPool(1);
     }
 
     public String multipartUpload(String bucketName, String fileName, File file) {
+
+        startMonitoring();
 
         String mimeType;
         try {
@@ -65,10 +80,7 @@ public class S3MultipartUpload {
         CreateMultipartUploadResponse createMultipartUploadResponse = s3Client.createMultipartUpload(createMultipartUploadRequest);
         String uploadId = createMultipartUploadResponse.uploadId();
 
-        // Utilising multithreading to upload multiple parts concurrently
-        ExecutorService executor = Executors.newFixedThreadPool(4);
-
-        List<Future<CompletedPart>> futures = new ArrayList<>();
+        List<Future<Void>> futures = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] buffer = new byte[(int)PART_SIZE];
             int bytesRead;
@@ -84,14 +96,13 @@ public class S3MultipartUpload {
                 final byte[] currentPartData = partBytes;
 
                 String finalFileName = fileName;
-                int finalPartNumber = partNumber;
                 int finalBytesRead = bytesRead;
                 futures.add(executor.submit(() -> {
                     UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
                             .bucket(bucketName)
                             .key(finalFileName)
                             .uploadId(uploadId)
-                            .partNumber(finalPartNumber)
+                            .partNumber(currentPartNumber)
                             .contentLength((long) finalBytesRead)
                             .build();
 
@@ -101,10 +112,11 @@ public class S3MultipartUpload {
                             RequestBody.fromBytes(currentPartData)
                     );
 
-                    return CompletedPart.builder()
+                    completedParts.put(currentPartNumber,CompletedPart.builder()
                             .partNumber(currentPartNumber)
                             .eTag(uploadPartResponse.eTag())
-                            .build();
+                            .build());
+                    return null;
                 }));
 
             }
@@ -116,23 +128,23 @@ public class S3MultipartUpload {
                             .uploadId(uploadId)
                             .build()
             );
-            throw new RuntimeException("Multipart upload failed: " + e.getMessage(), e);
+            throw new RuntimeException("Multipart upload failed: ", e);
         }
 
-        List<CompletedPart> completedParts = new ArrayList<>();
         try {
-            for(Future<CompletedPart> future : futures) {
-
-                completedParts.add(future.get());
+            for(Future<Void> future : futures) {
+                future.get();
             }
-        } catch (InterruptedException e) {
-            throw new RuntimeException("InterruptedException: " + e);
-        } catch (ExecutionException e) {
-            throw new RuntimeException("ExecutionException:" + e);
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException("Error while waiting for parts to upload", e);
         }
+
+        // Sorting completed parts by partNumber
+        List<CompletedPart> sortedCompletedParts = new ArrayList<>(completedParts.values());
+        sortedCompletedParts.sort(Comparator.comparingInt(CompletedPart::partNumber));
 
         CompletedMultipartUpload completedMultipartUpload = CompletedMultipartUpload.builder()
-                .parts(completedParts)
+                .parts(sortedCompletedParts)
                 .build();
 
         CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
@@ -152,6 +164,32 @@ public class S3MultipartUpload {
 
         System.out.println("Multipart upload successful: " + fileName);
 
+        stopMonitoring();
+
         return presignedUrl.toString();
+    }
+
+    private void startMonitoring() {
+        ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executor;
+        scheduler.scheduleAtFixedRate(() -> {
+            System.out.println("===== Thread Pool Stats =====");
+            System.out.println("Active threads: " + threadPoolExecutor.getActiveCount());
+            System.out.println("Pool size: " + threadPoolExecutor.getPoolSize());
+            System.out.println("Largest pool size: " + threadPoolExecutor.getLargestPoolSize());
+            System.out.println("Completed tasks: " + threadPoolExecutor.getCompletedTaskCount());
+            System.out.println("Task queue size: " + threadPoolExecutor.getQueue().size());
+            System.out.println("=============================");
+        }, 0, 5, TimeUnit.SECONDS); // Logs every 5 seconds
+    }
+
+    private void stopMonitoring() {
+        scheduler.shutdown();
+        try {
+            if (!scheduler.awaitTermination(1, TimeUnit.SECONDS)) {
+                scheduler.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            scheduler.shutdownNow();
+        }
     }
 }
