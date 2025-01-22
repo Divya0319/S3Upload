@@ -15,6 +15,10 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 @Service
 public class S3MultipartUpload {
@@ -61,7 +65,10 @@ public class S3MultipartUpload {
         CreateMultipartUploadResponse createMultipartUploadResponse = s3Client.createMultipartUpload(createMultipartUploadRequest);
         String uploadId = createMultipartUploadResponse.uploadId();
 
-        List<CompletedPart> completedParts = new ArrayList<>();
+        // Utilising multithreading to upload multiple parts concurrently
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+
+        List<Future<CompletedPart>> futures = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(file)) {
             byte[] buffer = new byte[(int)PART_SIZE];
             int bytesRead;
@@ -73,28 +80,33 @@ public class S3MultipartUpload {
                 byte[] partBytes = new byte[bytesRead];
                 System.arraycopy(buffer, 0, partBytes, 0, bytesRead);
 
+                final int currentPartNumber = partNumber++;
+                final byte[] currentPartData = partBytes;
 
-                UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
-                        .bucket(bucketName)
-                        .key(fileName)
-                        .uploadId(uploadId)
-                        .partNumber(partNumber)
-                        .contentLength((long)bytesRead)
-                        .build();
+                String finalFileName = fileName;
+                int finalPartNumber = partNumber;
+                int finalBytesRead = bytesRead;
+                futures.add(executor.submit(() -> {
+                    UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
+                            .bucket(bucketName)
+                            .key(finalFileName)
+                            .uploadId(uploadId)
+                            .partNumber(finalPartNumber)
+                            .contentLength((long) finalBytesRead)
+                            .build();
 
-                UploadPartResponse uploadPartResponse = s3Client.uploadPart(
-                        uploadPartRequest,
-                        RequestBody.fromBytes(partBytes)
-                );
 
-                completedParts.add(
-                        CompletedPart.builder()
-                                .partNumber(partNumber)
-                                .eTag(uploadPartResponse.eTag())
-                                .build()
-                );
+                    UploadPartResponse uploadPartResponse = s3Client.uploadPart(
+                            uploadPartRequest,
+                            RequestBody.fromBytes(currentPartData)
+                    );
 
-                partNumber++;
+                    return CompletedPart.builder()
+                            .partNumber(currentPartNumber)
+                            .eTag(uploadPartResponse.eTag())
+                            .build();
+                }));
+
             }
         } catch (IOException e) {
             s3Client.abortMultipartUpload(
@@ -107,15 +119,32 @@ public class S3MultipartUpload {
             throw new RuntimeException("Multipart upload failed: " + e.getMessage(), e);
         }
 
+        List<CompletedPart> completedParts = new ArrayList<>();
+        try {
+            for(Future<CompletedPart> future : futures) {
+
+                completedParts.add(future.get());
+            }
+        } catch (InterruptedException e) {
+            throw new RuntimeException("InterruptedException: " + e);
+        } catch (ExecutionException e) {
+            throw new RuntimeException("ExecutionException:" + e);
+        }
+
+        CompletedMultipartUpload completedMultipartUpload = CompletedMultipartUpload.builder()
+                .parts(completedParts)
+                .build();
+
         CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
                 .bucket(bucketName)
                 .key(fileName)
                 .uploadId(uploadId)
-                .multipartUpload(CompletedMultipartUpload.builder()
-                        .parts(completedParts)
-                        .build())
+                .multipartUpload(completedMultipartUpload)
                 .build();
+
         s3Client.completeMultipartUpload(completeMultipartUploadRequest);
+
+        executor.shutdown();
 
         S3UrlGenerator s3UrlGenerator = new S3UrlGenerator();
 
