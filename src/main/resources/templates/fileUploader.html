@@ -15,7 +15,7 @@
 
     <div class="d-flex justify-content-center">
         <div class="card shadow-sm p-4" style="width: 400px;">
-            <form method="POST" action="/api/s3/upload" enctype="multipart/form-data">
+            <form method="POST" action="/upload" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label for="file" class="form-label">Choose a file to upload</label>
                     <input type="file" class="form-control" id="file" name="file" required>
@@ -32,7 +32,7 @@
         <h4>Uploaded File:</h4>
         <div th:if="${uploadedFileType == 'image'}">
             <!-- Show Image -->
-            <img th:src="@{${uploadedFile}}" alt="Uploaded Image" class="img-fluid rounded mt-3">
+            <img th:src="@{${uploadedFile}}" alt="Uploaded Image" width="200" height="200">
         </div>
         <div th:if="${uploadedFileType != 'image'}">
             <!-- Show Link -->
