@@ -6,7 +6,7 @@ import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.IOException;
 import java.net.URL;
@@ -50,5 +50,32 @@ public class S3Service {
         URL presignedUrl = s3UrlGenerator.generatePreSignedUrl(bucketName, fileName, Region.AP_NORTHEAST_1);
 
         return presignedUrl.toString();
+    }
+
+    public boolean deleteFile(String bucketName, String fileName) {
+        ListObjectVersionsRequest listRequest = ListObjectVersionsRequest.builder()
+                .bucket(bucketName)
+                .prefix(fileName)
+                .build();
+
+        ListObjectVersionsResponse listResponse = s3Client.listObjectVersions(listRequest);
+
+        for(ObjectVersion version : listResponse.versions()) {
+            String versionId = version.versionId();
+
+            DeleteObjectRequest deleteObjectRequest = DeleteObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(fileName)
+                    .versionId(versionId)
+                    .build();
+
+            try {
+                s3Client.deleteObject(deleteObjectRequest);
+            } catch(Exception ex) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

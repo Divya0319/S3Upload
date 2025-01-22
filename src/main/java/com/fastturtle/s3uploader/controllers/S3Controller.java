@@ -1,14 +1,10 @@
 package com.fastturtle.s3uploader.controllers;
 
+import com.fastturtle.s3uploader.utils.FileRequest;
 import com.fastturtle.s3uploader.services.S3Service;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-import java.net.URL;
 import java.util.Map;
 
 @RestController
@@ -28,5 +24,14 @@ public class S3Controller {
 
         String fileUrl = s3Service.uploadFile(bucketName, fileName, file);
         return Map.of("fileUrl", fileUrl);
+    }
+
+    @PostMapping("/delete")
+    public Map<String, Boolean> deleteFile(@RequestBody FileRequest fileRequest) {
+        String bucketName = "bucket-for-expenses-csv";
+
+        boolean fileDeletionResponse = s3Service.deleteFile(bucketName, fileRequest.getFileName());
+
+        return Map.of("fileDeletionStatus", fileDeletionResponse);
     }
 }
