@@ -68,6 +68,8 @@ public class S3MultipartUpload {
             int partNumber = 1;
 
             while((bytesRead = fis.read(buffer)) > 0) {
+
+                System.out.printf("Uploading part %d, size %d bytes%n", partNumber, bytesRead);
                 byte[] partBytes = new byte[bytesRead];
                 System.arraycopy(buffer, 0, partBytes, 0, bytesRead);
 
