@@ -1,15 +1,22 @@
 package com.fastturtle.s3uploader.services;
 
+import com.fastturtle.s3uploader.utils.S3UrlGenerator;
+import org.springframework.stereotype.Service;
 import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
+@Service
 public class S3MultipartUpload {
 
     private static final long PART_SIZE = 5 * 1024 * 1024;
@@ -20,10 +27,35 @@ public class S3MultipartUpload {
         this.s3Client = s3Client;
     }
 
-    public void multipartUpload(String bucketName, String key, File file, long fileSize) {
+    public String multipartUpload(String bucketName, String fileName, File file) {
+
+        String mimeType;
+        try {
+            mimeType = Files.probeContentType(Paths.get(fileName));
+        } catch (IOException e) {
+            throw new RuntimeException("Unknown file type :", e);
+        }
+        if (mimeType == null) {
+            mimeType = "application/octet-stream"; // Fallback for unknown file types
+        }
+
+        if(fileName.endsWith(".csv") || fileName.endsWith(".xlsx")) {
+            fileName = "spreadsheets/" + fileName;
+        } else if(fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png")) {
+            fileName = "images/" + fileName;
+        } else if(fileName.endsWith(".pdf")) {
+            fileName = "pdfs/" + fileName;
+        } else if(fileName.endsWith(".gif")) {
+            fileName = "gifs/" + fileName;
+        } else {
+            fileName = "misc/" + fileName;
+        }
+
         CreateMultipartUploadRequest createMultipartUploadRequest = CreateMultipartUploadRequest.builder()
                 .bucket(bucketName)
-                .key(key)
+                .key(fileName)
+                .contentType(mimeType)
+                .contentDisposition("inline")
                 .build();
 
         CreateMultipartUploadResponse createMultipartUploadResponse = s3Client.createMultipartUpload(createMultipartUploadRequest);
@@ -42,7 +74,7 @@ public class S3MultipartUpload {
 
                 UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
                         .bucket(bucketName)
-                        .key(key)
+                        .key(fileName)
                         .uploadId(uploadId)
                         .partNumber(partNumber)
                         .contentLength((long)bytesRead)
@@ -66,7 +98,7 @@ public class S3MultipartUpload {
             s3Client.abortMultipartUpload(
                     AbortMultipartUploadRequest.builder()
                             .bucket(bucketName)
-                            .key(key)
+                            .key(fileName)
                             .uploadId(uploadId)
                             .build()
             );
@@ -75,7 +107,7 @@ public class S3MultipartUpload {
 
         CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
                 .bucket(bucketName)
-                .key(key)
+                .key(fileName)
                 .uploadId(uploadId)
                 .multipartUpload(CompletedMultipartUpload.builder()
                         .parts(completedParts)
@@ -83,6 +115,12 @@ public class S3MultipartUpload {
                 .build();
         s3Client.completeMultipartUpload(completeMultipartUploadRequest);
 
-        System.out.println("Multipart upload successful: " + key);
+        S3UrlGenerator s3UrlGenerator = new S3UrlGenerator();
+
+        URL presignedUrl = s3UrlGenerator.generatePreSignedUrl(bucketName, fileName, Region.AP_NORTHEAST_1);
+
+        System.out.println("Multipart upload successful: " + fileName);
+
+        return presignedUrl.toString();
     }
 }

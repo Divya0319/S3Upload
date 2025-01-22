@@ -2,7 +2,6 @@ package com.fastturtle.s3uploader.services;
 
 import com.fastturtle.s3uploader.utils.S3UrlGenerator;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
