@@ -32,6 +32,19 @@ public class S3Service {
         if (mimeType == null) {
             mimeType = "application/octet-stream"; // Fallback for unknown file types
         }
+
+        if(fileName.endsWith(".csv") || fileName.endsWith(".xlsx")) {
+            fileName = "spreadsheets/" + fileName;
+        } else if(fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png")) {
+            fileName = "images/" + fileName;
+        } else if(fileName.endsWith(".pdf")) {
+           fileName = "pdfs/" + fileName;
+        } else if(fileName.endsWith(".gif")) {
+            fileName = "gifs/" + fileName;
+        } else {
+            fileName = "misc/" + fileName;
+        }
+
         PutObjectRequest putObjectRequest = PutObjectRequest.builder()
                 .bucket(bucketName)
                 .key(fileName)
