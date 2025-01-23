@@ -1,20 +1,23 @@
 package com.fastturtle.s3uploader.services;
 
+import com.fastturtle.s3uploader.utils.ProgressTrackingInputStream;
 import com.fastturtle.s3uploader.utils.S3UrlGenerator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class S3MultipartUploadService {
@@ -28,7 +31,8 @@ public class S3MultipartUploadService {
     private ScheduledExecutorService scheduler;
 
     private final Map<String, SseEmitter> sseEmitters = new ConcurrentHashMap<>();
-    private String currentFileName;
+
+    private static Logger logger = LoggerFactory.getLogger(S3MultipartUploadService.class);
 
     // Utilising multithreading to upload multiple parts concurrently
     private ExecutorService executor = new ThreadPoolExecutor(
@@ -41,51 +45,75 @@ public class S3MultipartUploadService {
     public S3MultipartUploadService(S3Client s3Client) {
         this.s3Client = s3Client;
         completedParts = new ConcurrentHashMap<>();
-        this.scheduler = Executors.newScheduledThreadPool(1);
+//        this.scheduler = Executors.newScheduledThreadPool(1);
     }
 
     public String multipartUpload(String bucketName, String fileName, File file) {
 
-        // Initialize multipart upload
-        String uploadId = initializeMultipartUpload(bucketName, fileName);
-
         Map<Integer, Long> partSizes = new ConcurrentHashMap<>();
-        Map<Integer, AtomicLong> uploadedBytesPerPart = new ConcurrentHashMap<>();
 
-        startMonitoring();
+//        startMonitoring();
 
-        if(fileName.endsWith(".csv") || fileName.endsWith(".xlsx")) {
+        String originalFileName = fileName;
+
+        if (fileName.endsWith(".csv") || fileName.endsWith(".xlsx")) {
             fileName = "spreadsheets/" + fileName;
-        } else if(fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png")) {
+        } else if (fileName.endsWith(".jpg") || fileName.endsWith(".jpeg") || fileName.endsWith(".png")) {
             fileName = "images/" + fileName;
-        } else if(fileName.endsWith(".pdf")) {
+        } else if (fileName.endsWith(".pdf")) {
             fileName = "pdfs/" + fileName;
-        } else if(fileName.endsWith(".gif")) {
+        } else if (fileName.endsWith(".gif")) {
             fileName = "gifs/" + fileName;
         } else {
             fileName = "misc/" + fileName;
         }
 
+        String mimeType;
+        try {
+            mimeType = Files.probeContentType(Paths.get(fileName));
+        } catch (IOException e) {
+            throw new RuntimeException("Unknown file type :", e);
+        }
+        if (mimeType == null) {
+            mimeType = "application/octet-stream"; // Fallback for unknown file types
+        }
+
+        CreateMultipartUploadRequest createMultipartUploadRequest = CreateMultipartUploadRequest.builder()
+                .bucket(bucketName)
+                .key(fileName)
+                .contentType(mimeType)
+                .contentDisposition("inline")
+                .build();
+
+        CreateMultipartUploadResponse createMultipartUploadResponse = s3Client.createMultipartUpload(createMultipartUploadRequest);
+        String uploadId = createMultipartUploadResponse.uploadId();
+
         List<Future<Void>> futures = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(file)) {
-            byte[] buffer = new byte[(int)PART_SIZE];
+            byte[] buffer = new byte[(int) PART_SIZE];
             int bytesRead;
             int partNumber = 1;
 
-            while((bytesRead = fis.read(buffer)) > 0) {
+            while ((bytesRead = fis.read(buffer)) > 0) {
 
 //                System.out.printf("Uploading part %d, size %d bytes%n", partNumber, bytesRead);
                 byte[] partBytes = new byte[bytesRead];
                 System.arraycopy(buffer, 0, partBytes, 0, bytesRead);
 
-                partSizes.put(partNumber, (long)bytesRead);
-                uploadedBytesPerPart.put(partNumber, new AtomicLong(0));
+                partSizes.put(partNumber, (long) bytesRead);
 
                 final int currentPartNumber = partNumber++;
 
                 String finalFileName = fileName;
                 int finalBytesRead = bytesRead;
                 futures.add(executor.submit(() -> {
+
+                    InputStream progressTrackingInputStream = new ProgressTrackingInputStream(
+                            new ByteArrayInputStream(partBytes),
+                            currentPartNumber,
+                            partSizes.get(currentPartNumber),
+                            sseEmitters.get(originalFileName)
+                    );
                     UploadPartRequest uploadPartRequest = UploadPartRequest.builder()
                             .bucket(bucketName)
                             .key(finalFileName)
@@ -97,18 +125,20 @@ public class S3MultipartUploadService {
 
                     UploadPartResponse uploadPartResponse = s3Client.uploadPart(
                             uploadPartRequest,
-                            RequestBody.fromBytes(partBytes)
+                            RequestBody.fromInputStream(progressTrackingInputStream, finalBytesRead)
                     );
 
-                    // Simulate progress update (entire part is uploaded at once)
-                    sendPartProgress(currentPartNumber, partSizes.get(currentPartNumber), partSizes.get(currentPartNumber));
 
-                    completedParts.put(currentPartNumber,CompletedPart.builder()
+                    completedParts.put(currentPartNumber, CompletedPart.builder()
                             .partNumber(currentPartNumber)
                             .eTag(uploadPartResponse.eTag())
                             .build());
+
+                    progressTrackingInputStream.close();
+
                     return null;
                 }));
+
 
             }
         } catch (IOException e) {
@@ -116,57 +146,47 @@ public class S3MultipartUploadService {
             throw new RuntimeException("Multipart upload failed: ", e);
         }
 
-        waitForUploadCompletion(futures);
+        URL presignedUrl;
+        try {
 
-        // Sorting completed parts by partNumber
-        List<CompletedPart> sortedCompletedParts = new ArrayList<>(completedParts.values());
-        sortedCompletedParts.sort(Comparator.comparingInt(CompletedPart::partNumber));
+            waitForUploadCompletion(futures);
 
-        CompletedMultipartUpload completedMultipartUpload = CompletedMultipartUpload.builder()
-                .parts(sortedCompletedParts)
-                .build();
+            // Sorting completed parts by partNumber
+            List<CompletedPart> sortedCompletedParts = new ArrayList<>(completedParts.values());
+            sortedCompletedParts.sort(Comparator.comparingInt(CompletedPart::partNumber));
 
-        CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
-                .bucket(bucketName)
-                .key(fileName)
-                .uploadId(uploadId)
-                .multipartUpload(completedMultipartUpload)
-                .build();
+            CompletedMultipartUpload completedMultipartUpload = CompletedMultipartUpload.builder()
+                    .parts(sortedCompletedParts)
+                    .build();
 
-        s3Client.completeMultipartUpload(completeMultipartUploadRequest);
+            CompleteMultipartUploadRequest completeMultipartUploadRequest = CompleteMultipartUploadRequest.builder()
+                    .bucket(bucketName)
+                    .key(fileName)
+                    .uploadId(uploadId)
+                    .multipartUpload(completedMultipartUpload)
+                    .build();
 
-        removeEmitter(fileName);
+            s3Client.completeMultipartUpload(completeMultipartUploadRequest);
 
-        executor.shutdown();
+            removeEmitter(fileName);
+
+            executor.shutdown();
 
 
-        S3UrlGenerator s3UrlGenerator = new S3UrlGenerator();
+            S3UrlGenerator s3UrlGenerator = new S3UrlGenerator();
 
-        URL presignedUrl = s3UrlGenerator.generatePreSignedUrl(bucketName, fileName, Region.AP_NORTHEAST_1);
+            presignedUrl = s3UrlGenerator.generatePreSignedUrl(bucketName, fileName, Region.AP_NORTHEAST_1);
 
-        System.out.println("Multipart upload successful: " + fileName);
+            logger.info("Multipart upload successful: {}",  fileName);
+        } catch (AsyncRequestTimeoutException aex) {
+            throw new RuntimeException(aex);
+        }
 
-        stopMonitoring();
+//        stopMonitoring();
 
         return presignedUrl.toString();
     }
 
-    // Sends progress updates for a specific part
-    private void sendPartProgress(int partNumber, long bytesUploaded, long partSize) {
-        double percentage = ((double) bytesUploaded / partSize) * 100;
-        SseEmitter emitter = sseEmitters.get(currentFileName);
-        if (emitter != null) {
-            try {
-                Map<String, Object> progressData = new HashMap<>();
-                progressData.put("partNumber", partNumber);
-                progressData.put("percentage", percentage);
-
-                emitter.send(SseEmitter.event().data(progressData));
-            } catch (IOException e) {
-                emitter.completeWithError(e);
-            }
-        }
-    }
 
     private void startMonitoring() {
         ThreadPoolExecutor threadPoolExecutor = (ThreadPoolExecutor) executor;

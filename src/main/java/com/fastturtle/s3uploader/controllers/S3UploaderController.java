@@ -13,8 +13,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Controller
 public class S3UploaderController {
@@ -22,8 +20,6 @@ public class S3UploaderController {
     private final S3Service s3Service;
 
     private final S3MultipartUploadService s3MultipartUploadService;
-
-    private final Map<String, SseEmitter> sseEmitters = new ConcurrentHashMap<>();
 
     public S3UploaderController(S3Service s3Service, S3MultipartUploadService s3MultipartUploadService) {
         this.s3Service = s3Service;

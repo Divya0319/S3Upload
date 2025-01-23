@@ -29,7 +29,6 @@
 
     <!-- Upload Progress Section -->
     <div class="mt-4">
-        <h4>Upload Progress:</h4>
         <div id="progress-log" class="text-center"></div>
     </div>
 
@@ -67,7 +66,7 @@
         progressLog.innerHTML = ''; // Clear previous logs
 
         // Create EventSource for monitoring upload progress
-        const eventSource = new EventSource(`/upload/progress/${encodeURIComponent(fileName)}`);
+        const eventSource = new EventSource(`/progress/${encodeURIComponent(fileName)}`);
 
         eventSource.onmessage = function (event) {
             const data = JSON.parse(event.data);
