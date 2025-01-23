@@ -15,7 +15,7 @@
 
     <div class="d-flex justify-content-center">
         <div class="card shadow-sm p-4" style="width: 400px;">
-            <form method="POST" action="/upload" enctype="multipart/form-data">
+            <form id="upload-form" method="POST" action="/upload" enctype="multipart/form-data">
                 <div class="mb-3">
                     <label for="file" class="form-label">Choose a file to upload</label>
                     <input type="file" class="form-control" id="file" name="file" required>
@@ -25,6 +25,12 @@
                 </div>
             </form>
         </div>
+    </div>
+
+    <!-- Upload Progress Section -->
+    <div class="mt-4">
+        <h4>Upload Progress:</h4>
+        <div id="progress-log" class="text-center"></div>
     </div>
 
     <!-- Uploaded File Preview Section -->
@@ -43,5 +49,51 @@
 
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    document.getElementById('upload-form').addEventListener('submit', function (event) {
+        event.preventDefault(); // Prevent the form from submitting immediately
+
+        const fileInput = document.getElementById('file');
+        const file = fileInput.files[0];
+
+        if (!file) {
+            alert('Please select a file to upload!');
+            return;
+        }
+
+        const fileName = file.name; // Get the file name
+        const progressLog = document.getElementById('progress-log');
+        progressLog.innerHTML = ''; // Clear previous logs
+
+        // Create EventSource for monitoring upload progress
+        const eventSource = new EventSource(`/upload/progress/${encodeURIComponent(fileName)}`);
+
+        eventSource.onmessage = function (event) {
+            const data = JSON.parse(event.data);
+            const { partNumber, percentage } = data;
+
+            // Update or create progress entry for the current part
+            let progressEntry = document.getElementById(`part-${partNumber}`);
+            if (!progressEntry) {
+                progressEntry = document.createElement('p');
+                progressEntry.id = `part-${partNumber}`;
+                progressLog.appendChild(progressEntry);
+            }
+            progressEntry.textContent = `Part ${partNumber}: ${percentage.toFixed(2)}%`;
+        };
+
+        eventSource.onerror = function () {
+            const errorMessage = document.createElement('p');
+            errorMessage.textContent = 'Error in progress monitoring!';
+            errorMessage.className = 'text-danger';
+            progressLog.appendChild(errorMessage);
+            eventSource.close();
+        };
+
+        // Submit the form programmatically after setting up the EventSource
+        this.submit();
+    });
+</script>
 </body>
 </html>
