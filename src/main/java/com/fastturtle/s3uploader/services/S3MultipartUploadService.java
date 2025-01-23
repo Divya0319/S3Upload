@@ -1,7 +1,5 @@
 package com.fastturtle.s3uploader.services;
 
-import com.amazonaws.event.ProgressEvent;
-import com.amazonaws.event.ProgressListener;
 import com.fastturtle.s3uploader.utils.S3UrlGenerator;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -14,8 +12,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -51,7 +47,7 @@ public class S3MultipartUploadService {
         this.scheduler = Executors.newScheduledThreadPool(1);
     }
 
-    public String multipartUpload(String bucketName, String fileName, File file, SseEmitter emitter) {
+    public String multipartUpload(String bucketName, String fileName, File file) {
 
         // Initialize multipart upload
         String uploadId = initializeMultipartUpload(bucketName, fileName);
@@ -142,14 +138,10 @@ public class S3MultipartUploadService {
 
         s3Client.completeMultipartUpload(completeMultipartUploadRequest);
 
-        try {
-            emitter.send("Upload complete");
-        } catch (IOException e) {
-            throw new RuntimeException("Emitter send error: ", e);
-        } finally {
-            emitter.complete();
-            executor.shutdown();
-        }
+        removeEmitter(fileName);
+
+        executor.shutdown();
+
 
         S3UrlGenerator s3UrlGenerator = new S3UrlGenerator();
 
@@ -233,6 +225,11 @@ public class S3MultipartUploadService {
     public SseEmitter registerEmitter(String fileName) {
         SseEmitter emitter = new SseEmitter();
         sseEmitters.put(fileName, emitter);
+
+        emitter.onCompletion(() -> sseEmitters.remove(fileName));
+        emitter.onTimeout(() -> sseEmitters.remove(fileName));
+        emitter.onError(e -> sseEmitters.remove(fileName));
+
         return emitter;
     }
 
