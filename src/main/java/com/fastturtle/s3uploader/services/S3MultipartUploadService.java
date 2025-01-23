@@ -1,8 +1,8 @@
 package com.fastturtle.s3uploader.services;
 
 import com.fastturtle.s3uploader.utils.S3UrlGenerator;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
@@ -18,9 +18,10 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
-public class S3MultipartUpload {
+public class S3MultipartUploadService {
 
     private static final long PART_SIZE = 5 * 1024 * 1024;
 
@@ -38,13 +39,17 @@ public class S3MultipartUpload {
             TimeUnit.SECONDS,
             new LinkedBlockingDeque<>());
 
-    public S3MultipartUpload(S3Client s3Client) {
+    public S3MultipartUploadService(S3Client s3Client) {
         this.s3Client = s3Client;
         completedParts = new ConcurrentHashMap<>();
         this.scheduler = Executors.newScheduledThreadPool(1);
     }
 
-    public String multipartUpload(String bucketName, String fileName, File file) {
+    public String multipartUpload(String bucketName, String fileName, File file, SseEmitter emitter) {
+
+        long totalFileSize = file.length();
+
+        AtomicLong uploadedBytes = new AtomicLong(0);
 
         startMonitoring();
 
@@ -112,6 +117,11 @@ public class S3MultipartUpload {
                             RequestBody.fromBytes(currentPartData)
                     );
 
+                    long uploaded = uploadedBytes.addAndGet(finalBytesRead);
+                    int progress = (int)((uploaded * 100) / totalFileSize);
+
+                    emitter.send("Part " + currentPartNumber + ": " + progress + "% complete");
+
                     completedParts.put(currentPartNumber,CompletedPart.builder()
                             .partNumber(currentPartNumber)
                             .eTag(uploadPartResponse.eTag())
@@ -156,7 +166,14 @@ public class S3MultipartUpload {
 
         s3Client.completeMultipartUpload(completeMultipartUploadRequest);
 
-        executor.shutdown();
+        try {
+            emitter.send("Upload complete");
+        } catch (IOException e) {
+            throw new RuntimeException("Emitter send error: ", e);
+        } finally {
+            emitter.complete();
+            executor.shutdown();
+        }
 
         S3UrlGenerator s3UrlGenerator = new S3UrlGenerator();
 

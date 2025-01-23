@@ -1,6 +1,6 @@
 package com.fastturtle.s3uploader.controllers;
 
-import com.fastturtle.s3uploader.services.S3MultipartUpload;
+import com.fastturtle.s3uploader.services.S3MultipartUploadService;
 import com.fastturtle.s3uploader.utils.FileRequest;
 import com.fastturtle.s3uploader.services.S3Service;
 import org.springframework.web.bind.annotation.*;
@@ -16,11 +16,11 @@ public class S3Controller {
 
     private final S3Service s3Service;
 
-    private final S3MultipartUpload s3MultipartUpload;
+    private final S3MultipartUploadService s3MultipartUpload;
 
-    public S3Controller(S3Service s3Service, S3MultipartUpload s3MultipartUpload) {
+    public S3Controller(S3Service s3Service, S3MultipartUploadService s3MultipartUploadService) {
         this.s3Service = s3Service;
-        this.s3MultipartUpload = s3MultipartUpload;
+        this.s3MultipartUpload = s3MultipartUploadService;
     }
 
     @PostMapping("/upload")

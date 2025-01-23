@@ -1,6 +1,6 @@
 package com.fastturtle.s3uploader.controllers;
 
-import com.fastturtle.s3uploader.services.S3MultipartUpload;
+import com.fastturtle.s3uploader.services.S3MultipartUploadService;
 import com.fastturtle.s3uploader.services.S3Service;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -17,11 +17,11 @@ public class S3UploaderController {
 
     private final S3Service s3Service;
 
-    private final S3MultipartUpload s3MultipartUpload;
+    private final S3MultipartUploadService s3MultipartUploadService;
 
-    public S3UploaderController(S3Service s3Service, S3MultipartUpload s3MultipartUpload) {
+    public S3UploaderController(S3Service s3Service, S3MultipartUploadService s3MultipartUploadService) {
         this.s3Service = s3Service;
-        this.s3MultipartUpload = s3MultipartUpload;
+        this.s3MultipartUploadService = s3MultipartUploadService;
     }
 
     @GetMapping("/upload")
@@ -48,7 +48,7 @@ public class S3UploaderController {
         if(multipartFile.getSize() <= 1024 * 1024) {
             uploadFileUrl = s3Service.uploadFile(bucketName, fileName, tempFile);
         } else {
-            uploadFileUrl = s3MultipartUpload.multipartUpload(bucketName, fileName, tempFile);
+            uploadFileUrl = s3MultipartUploadService.multipartUpload(bucketName, fileName, tempFile);
         }
 
         String fileType = null;
