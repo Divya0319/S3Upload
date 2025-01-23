@@ -12,10 +12,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.net.URL;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -160,8 +157,11 @@ public class S3MultipartUploadService {
         SseEmitter emitter = sseEmitters.get(currentFileName);
         if (emitter != null) {
             try {
-                emitter.send(SseEmitter.event()
-                        .data(Map.of("partNumber", partNumber, "percentage", percentage)));
+                Map<String, Object> progressData = new HashMap<>();
+                progressData.put("partNumber", partNumber);
+                progressData.put("percentage", percentage);
+
+                emitter.send(SseEmitter.event().data(progressData));
             } catch (IOException e) {
                 emitter.completeWithError(e);
             }
