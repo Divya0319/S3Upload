@@ -41,6 +41,10 @@ public class ProgressTrackingInputStream extends InputStream {
 
         }
 
+        if (bytesUploaded == totalBytes) {
+            sendPartProgress(partNumber, totalBytes, totalBytes); // Emit 100% progress
+        }
+
         return bytesRead;
     }
 
