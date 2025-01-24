@@ -66,6 +66,10 @@ public class S3MultipartUploadService {
             fileName = "pdfs/" + fileName;
         } else if (fileName.endsWith(".gif")) {
             fileName = "gifs/" + fileName;
+        } else if(fileName.endsWith(".mp4") || fileName.endsWith(".avi") || fileName.endsWith(".m4a") || fileName.endsWith(".mkv")) {
+            fileName = "videos/" + fileName;
+        } else if(fileName.endsWith(".mp3") || fileName.endsWith(".wav") || fileName.endsWith(".ogg")) {
+            fileName = "musics/" + fileName;
         } else {
             fileName = "misc/" + fileName;
         }
