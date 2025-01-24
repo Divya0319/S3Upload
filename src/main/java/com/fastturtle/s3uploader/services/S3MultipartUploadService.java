@@ -134,8 +134,6 @@ public class S3MultipartUploadService {
                             .eTag(uploadPartResponse.eTag())
                             .build());
 
-                    progressTrackingInputStream.close();
-
                     return null;
                 }));
 

@@ -65,6 +65,17 @@
         const progressLog = document.getElementById('progress-log');
         progressLog.innerHTML = ''; // Clear previous logs
 
+        const partSize = 5 * 1024 * 1024;
+        const totalParts = Math.ceil(file.size / partSize);
+
+        for (let i = 1; i <= totalParts; i++) {
+            const progressEntry = document.createElement('div');
+            progressEntry.id = `part-${i}`;
+            progressEntry.innerHTML = `Part ${i}: <span>0%</span>`;
+            progressLog.appendChild(progressEntry);
+        }
+
+
         // Create EventSource for monitoring upload progress
         const eventSource = new EventSource(`/progress/${encodeURIComponent(fileName)}`);
 
