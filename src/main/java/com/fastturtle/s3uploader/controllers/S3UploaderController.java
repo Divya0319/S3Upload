@@ -47,7 +47,7 @@ public class S3UploaderController {
 
         String uploadFileUrl;
 
-        if(multipartFile.getSize() <= 1024 * 1024) {
+        if(multipartFile.getSize() <= 5 * 1024 * 1024) {
             uploadFileUrl = s3Service.uploadFile(bucketName, fileName, tempFile);
         } else {
             uploadFileUrl = s3MultipartUploadService.multipartUpload(bucketName, fileName, tempFile);
