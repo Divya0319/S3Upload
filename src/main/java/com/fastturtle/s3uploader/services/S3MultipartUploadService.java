@@ -32,15 +32,10 @@ public class S3MultipartUploadService {
 
     private final Map<String, SseEmitter> sseEmitters = new ConcurrentHashMap<>();
 
-    private static Logger logger = LoggerFactory.getLogger(S3MultipartUploadService.class);
+    private static final Logger logger = LoggerFactory.getLogger(S3MultipartUploadService.class);
 
     // Utilising multithreading to upload multiple parts concurrently
-    private ExecutorService executor = new ThreadPoolExecutor(
-            4,
-            10,
-            60L,
-            TimeUnit.SECONDS,
-            new LinkedBlockingDeque<>());
+    private ExecutorService executor;
 
     public S3MultipartUploadService(S3Client s3Client) {
         this.s3Client = s3Client;
@@ -49,6 +44,13 @@ public class S3MultipartUploadService {
     }
 
     public String multipartUpload(String bucketName, String fileName, File file) {
+
+        executor = new ThreadPoolExecutor(
+                4,
+                10,
+                60L,
+                TimeUnit.SECONDS,
+                new LinkedBlockingDeque<>());
 
         Map<Integer, Long> partSizes = new ConcurrentHashMap<>();
 
