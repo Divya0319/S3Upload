@@ -1,0 +1,37 @@
+.progress-container {
+    width: 20%;
+    margin: 20px auto;
+    background-color: #f3f3f3;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    overflow: hidden;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.progress-bar {
+    height: 25px;
+    width: 0;
+    background-color: #4caf50;
+    text-align: center;
+    color: white;
+    line-height: 25px;
+    font-size: 14px;
+    transition: width 0.2s ease;
+}
+
+.image-container {
+    width: 200px; /* Fixed width for the square */
+    height: 200px; /* Equal to width to make it a square */
+    overflow: hidden; /* Hide overflowing parts of the image */
+    border: 1px solid #ddd; /* Optional: Add a border for clarity */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0 auto;
+    background: #f8f8f8; /* Optional: Background for empty containers */
+}
+
+.image-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain; /* Fit entire image without cropping */
+}
