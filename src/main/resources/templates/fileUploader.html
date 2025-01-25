@@ -6,6 +6,27 @@
     <title>S3 Uploader</title>
     <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha3/dist/css/bootstrap.min.css">
+    <style>
+        .progress-container {
+            width: 20%;
+            margin: 20px auto;
+            background-color: #f3f3f3;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .progress-bar {
+            height: 25px;
+            width: 0;
+            background-color: #4caf50;
+            text-align: center;
+            color: white;
+            line-height: 25px;
+            font-size: 14px;
+            transition: width 0.2s ease;
+        }
+    </style>
 </head>
 <body>
 <div class="container mt-5">
@@ -82,7 +103,14 @@
         for (let i = 1; i <= totalParts; i++) {
             const progressEntry = document.createElement('div');
             progressEntry.id = `part-${i}`;
-            progressEntry.innerHTML = `Part ${i}: <span>0%</span>`;
+            progressEntry.classList.add("progress-container");
+
+            const progressBar = document.createElement('div');
+            progressBar.id = `progress-bar-${i}`
+            progressBar.classList.add("progress-bar");
+            progressBar.textContent = "0%";
+
+            progressEntry.appendChild(progressBar)
             progressLog.appendChild(progressEntry);
         }
 
@@ -95,13 +123,11 @@
             const { partNumber, percentage } = data;
 
             // Update or create progress entry for the current part
-            let progressEntry = document.getElementById(`part-${partNumber}`);
-            if (!progressEntry) {
-                progressEntry = document.createElement('p');
-                progressEntry.id = `part-${partNumber}`;
-                progressLog.appendChild(progressEntry);
+            let progressBar = document.getElementById(`progress-bar-${partNumber}`);
+            if (progressBar) {
+                progressBar.style.width = `${percentage}%`;
+                progressBar.textContent = `${percentage.toFixed(1)}%`;
             }
-            progressEntry.textContent = `Part ${partNumber}: ${percentage.toFixed(2)}%`;
         };
 
         eventSource.onerror = function () {
