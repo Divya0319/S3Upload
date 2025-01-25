@@ -69,8 +69,13 @@ public class S3UploaderController {
         return "fileUploader";
     }
 
-    @GetMapping("/progress/{fileName}")
+    @GetMapping("/progress/multipart/{fileName}")
     public SseEmitter uploadProgress(@PathVariable String fileName) {
         return s3MultipartUploadService.registerEmitter(fileName);
+    }
+
+    @GetMapping("/progress/singlepart/{fileName}")
+    public SseEmitter uploadProgressSinglePart(@PathVariable String fileName) {
+        return s3Service.registerEmitter(fileName);
     }
 }
