@@ -9,10 +9,12 @@ document.getElementById('upload-form').addEventListener('submit', function (even
         return;
     }
 
-    if(file.size > 5 * 1024 * 1024) {
+    if(file.size < 5 * 1024 * 1024) {
+        registerSinglePartEventSource(file);
+    } else if(file.size > 5 * 1024 * 1024 && file.size < 50 * 1024 * 1024) {
         registerMultipartEventSource(file);
     } else {
-        registerSinglePartEventSource(file);
+        showLargeFileError();
     }
 
 });
@@ -121,4 +123,18 @@ function registerSinglePartEventSource(file) {
 
     // Submit the form programmatically after setting up the EventSource
     document.getElementById('upload-form').submit();
+}
+
+function showLargeFileError() {
+    const progressLog = document.getElementById('progress-log');
+    progressLog.innerHTML = ''; // Clear previous logs
+
+    const largeFileText = document.createElement('p');
+    largeFileText.textContent = "Files greater than 50 mb are not allowed";
+    largeFileText.classList.add("text-danger")
+    progressLog.appendChild(largeFileText);
+
+    setTimeout(() => {
+        progressLog.removeChild(largeFileText);
+    }, 5000);
 }
